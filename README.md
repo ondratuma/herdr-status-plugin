@@ -13,9 +13,12 @@ the current pane.
 - **`plugin/herdr-plugin.toml`** — the herdr plugin (`ot.claude-status`). Its `[[events]]` hooks
   on `pane.agent_detected` / `pane.agent_status_changed` run `herdr-status __run event`, so herdr
   captures the lifecycle events natively. (`pane.output_matched` is subscription-only, so the
-  daemon — not the plugin — subscribes to it.)
-- **`bin/herdr-pane-rename`** — rename the current pane (sets both the pane label and the sidebar
-  display name). `herdr-pane-rename <name>` or `herdr-pane-rename --clear`.
+  daemon — not the plugin — subscribes to it.) It also defines a `rename` **action**: it
+  auto-generates a 2-4 word name (via `claude -p` on the pane's recent transcript) for every pane
+  that left a `.rename-request` marker.
+- **Auto-rename** — `herdr-status mark-rename` flags the current pane, then
+  `herdr plugin action invoke rename --plugin ot.claude-status` renames every marked pane. (The
+  marker is needed because `herdr plugin action invoke` can't carry the caller's pane id.)
 
 ## Display model
 

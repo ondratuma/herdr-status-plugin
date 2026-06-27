@@ -5,7 +5,7 @@
 # passing HERDR_PLUGIN_EVENT + HERDR_PLUGIN_EVENT_JSON (which carry pane_id + agent_status).
 # The timer's between-event ticking is handled by the daemon that `herdr-status` manages.
 #
-# Link it with:  herdr plugin link /Users/tumao/.config/herdr/plugins/claude-status
+# Link it with:  herdr plugin link <this repo>/plugin
 
 id = "ot.claude-status"
 name = "Claude Status"
@@ -21,3 +21,12 @@ command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
 [[events]]
 on = "pane.agent_status_changed"
 command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
+
+# Auto-rename action. Invoked with `herdr plugin action invoke ot.claude-status:rename`; it
+# auto-generates a 2-4 word name (via `claude -p` on the pane's recent transcript) for every
+# pane that left a `.rename-request` marker (written by `herdr-status mark-rename`).
+[[actions]]
+id = "rename"
+title = "Auto-rename pane"
+contexts = ["pane"]
+command = ["/Users/tumao/.local/bin/herdr-status", "__run", "autoname"]
