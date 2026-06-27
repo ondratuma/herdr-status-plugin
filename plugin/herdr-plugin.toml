@@ -21,12 +21,3 @@ command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
 [[events]]
 on = "pane.agent_status_changed"
 command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
-
-# Auto-rename action. Invoked with `herdr plugin action invoke ot.claude-status:rename`; it
-# auto-generates a 2-4 word name (via `claude -p` on the pane's recent transcript) for every
-# pane that left a `.rename-request` marker (written by `herdr-status mark-rename`).
-[[actions]]
-id = "rename"
-title = "Auto-rename pane"
-contexts = ["pane"]
-command = ["/Users/tumao/.local/bin/herdr-status", "__run", "autoname"]
