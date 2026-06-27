@@ -1,0 +1,23 @@
+# herdr plugin: capture pane lifecycle events and feed them to the `herdr-status` system
+# command, which maintains per-pane activity status (icon via state_labels + a counting timer).
+#
+# This is the EVENT-CAPTURE half. herdr invokes the command below once per matching event,
+# passing HERDR_PLUGIN_EVENT + HERDR_PLUGIN_EVENT_JSON (which carry pane_id + agent_status).
+# The timer's between-event ticking is handled by the daemon that `herdr-status` manages.
+#
+# Link it with:  herdr plugin link /Users/tumao/.config/herdr/plugins/claude-status
+
+id = "ot.claude-status"
+name = "Claude Status"
+version = "0.1.0"
+min_herdr_version = "0.7.1"
+description = "Per-pane activity status: icon via state_labels (herdr-swapped) + a counting timer."
+platforms = ["macos", "linux"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
