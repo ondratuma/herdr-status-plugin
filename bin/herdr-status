@@ -13,21 +13,51 @@ set -euo pipefail
 #      Self-reports set what the pane's STOPPED states (idle/blocked/done) display, so herdr
 #      reveals the icon the instant the pane goes idle. `waiting/input/done` release when the
 #      agent works again; `working/looping` (working-state badges) persist until clear/done.
+#      Also: `link` registers the plugin into the current session's server; `agents` lists every
+#      agent pane across ALL herdr sessions.
 #
-#   3. A DAEMON (`herdr-status __run daemon`, a singleton) advances the counting TIMER between
-#      events and registers/prunes panes via `herdr pane list`. herdr already reports each pane's
-#      agent_status, so an idle pane simply shows the idle icon (💤) — no output-matching needed.
+#   3. A DAEMON (`herdr-status __run daemon`) advances the counting TIMER between events and
+#      registers/prunes panes via `herdr pane list`. herdr already reports each pane's agent_status,
+#      so an idle pane simply shows the idle icon (💤) — no output-matching needed. ONE daemon per
+#      herdr server (keyed by socket): each session gets its own daemon + state dir under
+#      ~/.config/herdr/claude-status/<session>/ so concurrent sessions don't collide.
 #
 # Display: each state_label is `<icon> <timer>` (herdr swaps the icon per detected state — ⚡ work,
 # 🔁 loop, 💤 idle, ✅/⏳/✋ on a self-report, 💀 once stale); the self-reported detail rides in
 # custom_status, so the sidebar reads e.g. `⚡ 6m fixing parser`. Each push has a short TTL so a
 # dead daemon self-cleans. Safe anywhere: a no-op outside herdr (HERDR_ENV != 1), best-effort.
 
-STATE_DIR="${HOME}/.config/herdr/claude-status"
+STATE_ROOT="${HOME}/.config/herdr/claude-status"
+
+# Per-herdr-server namespace: each herdr session has its own socket, panes, state dir, and daemon,
+# so concurrent sessions don't collide (pane ids like "w3:p4" repeat across servers). The key is
+# the session name herdr uses: `default`, or the <name> under ~/.config/herdr/sessions/<name>/.
+server_key() {
+	local sock="${HERDR_SOCKET_PATH:-$HOME/.config/herdr/herdr.sock}"
+	case "$sock" in
+		"$HOME/.config/herdr/herdr.sock") printf 'default' ;;
+		"$HOME/.config/herdr/sessions/"*/herdr.sock)
+			local k="${sock#"$HOME"/.config/herdr/sessions/}"; printf '%s' "${k%/herdr.sock}" ;;
+		*) printf '%s' "${sock//[^A-Za-z0-9]/_}" ;;
+	esac
+}
+STATE_DIR="${STATE_ROOT}/$(server_key)"
 DAEMON_PID="${STATE_DIR}/daemon.pid"
 
+# Repo root (parent of bin/), resolving symlinks — used to find lib/ and plugin/.
+resolve_repo() {
+	local src="${BASH_SOURCE[0]}" dir
+	while [ -h "$src" ]; do
+		dir="$(cd -P "$(dirname "$src")" && pwd)"
+		src="$(readlink "$src")"
+		case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+	done
+	dir="$(cd -P "$(dirname "$src")" && pwd)"
+	(cd -P "$dir/.." && pwd)
+}
+
 usage() {
-	echo "Usage: $0 <working|looping|waiting|input|done|clear|off> [detail]" >&2
+	echo "Usage: $0 <working|looping|waiting|input|done|clear|off|link|agents> [detail]" >&2
 	exit 1
 }
 
@@ -77,18 +107,33 @@ if [ "$verb" = "__run" ]; then
 	[ -n "${HERDR_ENV:-}" ] || exit 0
 	command -v python3 >/dev/null 2>&1 || exit 0
 	export HERDR_STATUS_BIN="$0"
-	# locate the python implementation relative to this script's REAL path (follow
-	# symlinks: the wrapper is symlinked onto PATH, the .py lives in the repo's lib/).
-	src="${BASH_SOURCE[0]}"
-	while [ -h "$src" ]; do
-		dir="$(cd -P "$(dirname "$src")" && pwd)"
-		src="$(readlink "$src")"
-		case "$src" in /*) ;; *) src="$dir/$src" ;; esac
-	done
-	script_dir="$(cd -P "$(dirname "$src")" && pwd)"
-	impl="$script_dir/../lib/herdr-status.py"
+	impl="$(resolve_repo)/lib/herdr-status.py"   # .py lives in the repo's lib/, off PATH
 	[ -f "$impl" ] || exit 0
 	exec python3 "$impl" "$@"
+fi
+
+# cross-session overview: list every agent pane in every herdr session (works outside herdr too)
+if [ "$verb" = "agents" ] || [ "$verb" = "ls" ]; then
+	command -v python3 >/dev/null 2>&1 || { echo "python3 required" >&2; exit 1; }
+	impl="$(resolve_repo)/lib/herdr-status.py"
+	[ -f "$impl" ] || { echo "missing $impl" >&2; exit 1; }
+	exec python3 "$impl" agents
+fi
+
+# link the plugin into THIS session's herdr server (named sessions start with no plugins) + start
+# its daemon. Run it from a pane in the session you want tracked.
+if [ "$verb" = "link" ]; then
+	command -v herdr >/dev/null 2>&1 || { echo "herdr not found" >&2; exit 1; }
+	plugin_dir="$(resolve_repo)/plugin"
+	herdr plugin unlink ot.claude-status >/dev/null 2>&1 || true
+	if herdr plugin link "$plugin_dir" >/dev/null 2>&1; then
+		echo "herdr: plugin linked into session '$(server_key)' — its agents are now tracked"
+		ensure_daemon
+	else
+		echo "herdr: plugin link failed (is this session's server running?)" >&2
+		exit 1
+	fi
+	exit 0
 fi
 
 detail="${1:-}"
@@ -112,8 +157,8 @@ case "$verb" in
 	off)
 		stop_daemon
 		"$0" __run clearpane "$HERDR_PANE_ID"
-		rm -f "$STATE_DIR"/*.state "$STATE_DIR"/*.last "$STATE_DIR"/*.prompt 2>/dev/null || true
-		echo "herdr: tracker stopped (other panes fade within ~3m)"
+		rm -f "$STATE_DIR"/*.state "$STATE_DIR"/*.last 2>/dev/null || true
+		echo "herdr: tracker stopped for session '$(server_key)' (panes fade within ~3m)"
 		;;
 	__ensure)
 		ensure_daemon

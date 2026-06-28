@@ -14,7 +14,7 @@ ARGS = sys.argv[1:]
 mode = ARGS[0] if ARGS else ""
 
 SOURCE = "claude-status"
-STATE_DIR = os.path.expanduser("~/.config/herdr/claude-status")
+STATE_ROOT = os.path.expanduser("~/.config/herdr/claude-status")
 HEARTBEAT = 30
 STALE_S = 24 * 3600
 TTL_MS = 180000
@@ -23,6 +23,21 @@ STOPPED_STATES = ("idle", "blocked", "done")
 STOP_ICON = {"waiting": "⏳", "input": "✋", "done": "✅"}
 IDLE_ICON = "💤"                   # default label for an idle pane (herdr's "idle" state)
 STALE_ICON = "💀"                  # replaces the activity icon once a pane is stale (24h+)
+
+def server_key(sock=None):
+    # which herdr server this invocation talks to → its own state dir + daemon, so concurrent
+    # sessions don't collide. Matches the names `herdr session list` reports.
+    sock = sock or os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser("~/.config/herdr/herdr.sock")
+    home = os.path.expanduser("~")
+    if sock == os.path.join(home, ".config/herdr/herdr.sock"):
+        return "default"
+    prefix = os.path.join(home, ".config/herdr/sessions") + os.sep
+    suffix = os.sep + "herdr.sock"
+    if sock.startswith(prefix) and sock.endswith(suffix):
+        return sock[len(prefix):-len(suffix)] or "default"
+    return "".join(c if c.isalnum() else "_" for c in sock)
+
+STATE_DIR = os.path.join(STATE_ROOT, server_key())
 
 def sanitize(pane): return "".join(c if c.isalnum() else "_" for c in pane)
 def state_path(pane):  return os.path.join(STATE_DIR, sanitize(pane) + ".state")
@@ -170,6 +185,58 @@ if mode == "push":
 if mode == "clearpane":
     if len(ARGS) > 1:
         report(ARGS[1], "--clear-custom-status", "--clear-state-labels")
+    sys.exit(0)
+if mode == "agents":
+    # cross-session overview: every agent pane in every herdr session, with its current label.
+    try:
+        sessions = json.loads(subprocess.check_output(
+            ["herdr", "session", "list", "--json"], timeout=3))["sessions"]
+    except Exception:
+        sessions = [{"name": "default",
+                     "socket_path": os.path.expanduser("~/.config/herdr/herdr.sock")}]
+    rows = []
+    now = int(time.time())
+    for s in sessions:
+        name, sock = s.get("name", "?"), s.get("socket_path", "")
+        env = dict(os.environ, HERDR_SOCKET_PATH=sock)
+        try:
+            panes = json.loads(subprocess.check_output(
+                ["herdr", "pane", "list"], timeout=3, env=env))["result"]["panes"]
+        except Exception:
+            continue
+        for p in panes:
+            if not p.get("agent"):
+                continue
+            pid = p["pane_id"]
+            status = p.get("agent_status") or "unknown"
+            label = (p.get("state_labels") or {}).get(status, "")
+            # the sidebar NAME: herdr renders display_agent (what herdr-status-rename sets),
+            # falling back to the detected agent when unnamed — NOT the pane label or cwd.
+            disp = p.get("display_agent") or p.get("agent") or "—"
+            detail, elapsed = "", -1                       # from this session's state file
+            try:
+                with open(os.path.join(STATE_ROOT, name, sanitize(pid) + ".state")) as f:
+                    parts = f.read().split("\n")
+                detail = parts[1].strip() if len(parts) > 1 else ""
+                if len(parts) > 2 and parts[2].strip():
+                    elapsed = now - int(parts[2])
+            except Exception:
+                pass
+            rows.append({"sess": name, "pane": pid, "name": disp,
+                         "state": status, "label": label, "detail": detail, "elapsed": elapsed})
+    if not rows:
+        print("no agent panes found in any herdr session")
+        sys.exit(0)
+    rows.sort(key=lambda r: r["elapsed"], reverse=True)    # longest time-since first
+    cols = [("sess", "SESSION"), ("pane", "PANE"), ("name", "NAME"), ("state", "STATE")]
+    width = {k: max(len(h), max(len(str(r[k])) for r in rows)) for k, h in cols}
+    print("  ".join(h.ljust(width[k]) for k, h in cols) + "  STATUS")
+    for r in rows:
+        line = "  ".join(str(r[k]).ljust(width[k]) for k, _ in cols)
+        line += "  " + (r["label"] or "—")
+        if r["detail"]:
+            line += f"  · {r['detail']}"
+        print(line)
     sys.exit(0)
 if mode != "daemon":
     sys.exit(0)

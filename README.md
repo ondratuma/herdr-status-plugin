@@ -16,6 +16,19 @@ the current pane.
 - **`bin/herdr-status-rename`** — rename the current pane (sets both the pane label and the sidebar
   display name). `herdr-status-rename <name>` or `herdr-status-rename --clear`.
 
+## Multiple herdr sessions
+
+Each `herdr --session <name>` is an isolated server with its **own** config (plugins), socket, and
+panes — so the plugin is **per-session**, not global. The default session is set up by `install.sh`;
+for any other session, run **`herdr-status link`** from a pane inside it to register the plugin and
+start that session's daemon. State and daemons are namespaced per server under
+`~/.config/herdr/claude-status/<session>/`, so concurrent sessions never collide.
+
+- **`herdr-status agents`** (alias `ls`) — list every agent pane across **all** herdr sessions,
+  sorted by time-since (longest first). Columns: SESSION, PANE, NAME (the herdr **sidebar** name —
+  `display_agent`, i.e. what `herdr-status-rename` sets; the detected agent when unnamed), STATE,
+  and the live STATUS label (`💤 22h`, `⚡ 6m · <detail>`). Works from any terminal, in or out of herdr.
+
 ## Display model
 
 Each label in herdr's `state_labels` slot is `<icon> <timer>` — herdr swaps the icon natively per
