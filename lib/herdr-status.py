@@ -63,8 +63,8 @@ def write_last(pane, H):
         pass
 
 def fmt_elapsed(sec):
-    if sec >= STALE_S:
-        return "24h+"              # the 💀 is added as the icon (before the time) in render()
+    if sec >= STALE_S:            # stale: whole hours (the 💀 is added as the icon in render)
+        return f"{sec // 3600}h"
     m = sec // 60
     return f"{m}m" if m < 60 else f"{m // 60}h{m % 60}m"
 
