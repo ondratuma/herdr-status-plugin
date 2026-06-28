@@ -22,6 +22,7 @@ KEEPALIVE_S = 90
 STOPPED_STATES = ("idle", "blocked", "done")
 STOP_ICON = {"waiting": "⏳", "input": "✋", "done": "✅"}
 IDLE_ICON = "💤"                   # default label for an idle pane (herdr's "idle" state)
+STALE_ICON = "💀"                  # replaces the activity icon once a pane is stale (24h+)
 
 def sanitize(pane): return "".join(c if c.isalnum() else "_" for c in pane)
 def state_path(pane):  return os.path.join(STATE_DIR, sanitize(pane) + ".state")
@@ -63,7 +64,7 @@ def write_last(pane, H):
 
 def fmt_elapsed(sec):
     if sec >= STALE_S:
-        return "24h+ 💀"
+        return "24h+"              # the 💀 is added as the icon (before the time) in render()
     m = sec // 60
     return f"{m}m" if m < 60 else f"{m // 60}h{m % 60}m"
 
@@ -75,14 +76,17 @@ def render(pane):
     elapsed = int(time.time()) - since
     timer = fmt_elapsed(elapsed)
     # per-detected-state ICON only — the detail text rides in custom_status, not the label
-    work_icon = "🔁" if intent == "looping" else "⚡"
-    stop_icon = STOP_ICON.get(intent, "")      # ✅/⏳/✋ for done/waiting/input, else ""
-    icons = {"working": work_icon, "unknown": ""}
-    for s in STOPPED_STATES:                    # idle, blocked, done
-        icons[s] = stop_icon
-    if intent not in STOP_ICON and elapsed < STALE_S:
-        icons["idle"] = IDLE_ICON              # idle pane → 💤 (suppressed once stale, so
-                                               # the skull stands alone)
+    if elapsed >= STALE_S:                       # stale pane → the skull becomes the icon (and
+        icons = {s: STALE_ICON for s in          # leads the time); the activity state is moot
+                 ("working", "idle", "blocked", "done", "unknown")}
+    else:
+        work_icon = "🔁" if intent == "looping" else "⚡"
+        stop_icon = STOP_ICON.get(intent, "")   # ✅/⏳/✋ for done/waiting/input, else ""
+        icons = {"working": work_icon, "unknown": ""}
+        for s in STOPPED_STATES:                 # idle, blocked, done
+            icons[s] = stop_icon
+        if intent not in STOP_ICON:
+            icons["idle"] = IDLE_ICON           # idle pane → 💤
     # icon first, then the timer; a stateless pane (no icon) shows just the timer
     labels = {state: f"{icon} {timer}".strip() for state, icon in icons.items()}
     return detail, labels

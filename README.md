@@ -20,9 +20,9 @@ the current pane.
 
 Each label in herdr's `state_labels` slot is `<icon> <timer>` — herdr swaps the icon natively per
 detected state: ⚡ working, 🔁 looping, 💤 idle, ✅/⏳/✋ on a self-report, and 💀 once a pane goes
-stale (24h+, where the icon is dropped so the skull stands alone). The self-reported detail (if
-any) rides in `custom_status`, so a working pane reads `⚡ 6m fixing the parser` and an idle one
-just `💤 6m`.
+stale (24h+) — where the skull becomes the icon and leads the time, e.g. `💀 24h+`. The
+self-reported detail (if any) rides in `custom_status`, so a working pane reads
+`⚡ 6m fixing the parser` and an idle one just `💤 6m`.
 
 ## Install
 
