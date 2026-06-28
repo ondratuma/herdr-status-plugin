@@ -9,20 +9,19 @@ set -euo pipefail
 #      passing the event JSON (pane_id + agent_status). That is the event-capture half.
 #
 #   2. This SYSTEM COMMAND (`herdr-status <verb>`) lets an agent self-report intent:
-#        working 🔨|looping 🔁|waiting ⏳|input ✋|done ✅ [detail]   ·   clear (→ auto)   ·   off (stop)
+#        working ⚡|looping 🔁|waiting ⏳|input ✋|done ✅ [detail]   ·   clear (→ auto)   ·   off (stop)
 #      Self-reports set what the pane's STOPPED states (idle/blocked/done) display, so herdr
 #      reveals the icon the instant the pane goes idle. `waiting/input/done` release when the
 #      agent works again; `working/looping` (working-state badges) persist until clear/done.
 #
 #   3. A DAEMON (`herdr-status __run daemon`, a singleton) advances the counting TIMER between
-#      events, registers/prunes panes via `herdr pane list`, AND subscribes to
-#      `pane.output_matched` (the only way to get it — it is NOT a plugin hook) to detect the
-#      live prompt box (`❯`); while a pane is idle with its prompt box up, the idle icon is `>_`.
+#      events and registers/prunes panes via `herdr pane list`. herdr already reports each pane's
+#      agent_status, so an idle pane simply shows the idle icon (💤) — no output-matching needed.
 #
-# Display: state_labels carries everything (herdr swaps the label per detected state); each label
-# is led by the counting timer so the elapsed time is always shown first (`6m 🔨`, `6m >_`,
-# `24h+ 💀`). custom_status is cleared/unused. Each push has a short TTL so a dead daemon
-# self-cleans. Safe anywhere: a no-op outside herdr (HERDR_ENV != 1), best-effort otherwise.
+# Display: each state_label is `<icon> <timer>` (herdr swaps the icon per detected state — ⚡ work,
+# 🔁 loop, 💤 idle, ✅/⏳/✋ on a self-report, 💀 once stale); the self-reported detail rides in
+# custom_status, so the sidebar reads e.g. `⚡ 6m fixing parser`. Each push has a short TTL so a
+# dead daemon self-cleans. Safe anywhere: a no-op outside herdr (HERDR_ENV != 1), best-effort.
 
 STATE_DIR="${HOME}/.config/herdr/claude-status"
 DAEMON_PID="${STATE_DIR}/daemon.pid"

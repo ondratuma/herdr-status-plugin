@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """herdr-status implementation: the __run one-shots (event / push / clearpane)
-and the singleton daemon (timer + register/prune + live-prompt detection).
+and the singleton daemon (timer + register/prune).
 
 Invoked only by the `herdr-status` bash wrapper as
 `python3 herdr-status.py <event|push PANE|clearpane PANE|daemon>` — not meant to
@@ -8,28 +8,24 @@ be run directly. See ../bin/herdr-status for the wrapper, the self-report verbs,
 and the overall design notes.
 """
 
-import json, os, select, socket, subprocess, sys, time
+import json, os, subprocess, sys, time
 
 ARGS = sys.argv[1:]
 mode = ARGS[0] if ARGS else ""
 
 SOURCE = "claude-status"
 STATE_DIR = os.path.expanduser("~/.config/herdr/claude-status")
-SOCK_PATH = os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser("~/.config/herdr/herdr.sock")
 HEARTBEAT = 30
 STALE_S = 24 * 3600
 TTL_MS = 180000
 KEEPALIVE_S = 90
 STOPPED_STATES = ("idle", "blocked", "done")
 STOP_ICON = {"waiting": "⏳", "input": "✋", "done": "✅"}
-PROMPT_ICON = ">_"                 # live prompt box detected → ready for input
-PROMPT_RE = r"^\s*❯"              # claude's live_prompt_box line
-PROMPT_SOURCE = "visible"          # match the live (visible) prompt box, not stale scrollback
+IDLE_ICON = "💤"                   # default label for an idle pane (herdr's "idle" state)
 
 def sanitize(pane): return "".join(c if c.isalnum() else "_" for c in pane)
 def state_path(pane):  return os.path.join(STATE_DIR, sanitize(pane) + ".state")
 def last_path(pane):   return os.path.join(STATE_DIR, sanitize(pane) + ".last")
-def prompt_path(pane): return os.path.join(STATE_DIR, sanitize(pane) + ".prompt")
 
 def read_state(pane):
     try:
@@ -65,17 +61,6 @@ def write_last(pane, H):
     except Exception:
         pass
 
-def has_prompt(pane):  return os.path.exists(prompt_path(pane))
-def set_prompt(pane):
-    try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        open(prompt_path(pane), "w").close()
-    except Exception:
-        pass
-def clear_prompt(pane):
-    try: os.remove(prompt_path(pane))
-    except Exception: pass
-
 def fmt_elapsed(sec):
     if sec >= STALE_S:
         return "24h+ 💀"
@@ -87,25 +72,20 @@ def render(pane):
     if not st:
         return None
     intent, detail, since, _ = st
-    timer = fmt_elapsed(int(time.time()) - since)
-    working_lbl = "🔨"
-    stopped_lbl = ""
-    if intent == "working":
-        working_lbl = f"🔨 {detail}".rstrip()
-    elif intent == "looping":
-        working_lbl = f"🔁 {detail}".rstrip()
-    elif intent in STOP_ICON:
-        ic = STOP_ICON[intent]
-        stopped_lbl = f"{ic} {detail}".rstrip() if detail else ic
-    labels = {"working": working_lbl, "unknown": ""}
-    for s in STOPPED_STATES:
-        labels[s] = stopped_lbl
-    if intent not in STOP_ICON and has_prompt(pane):
-        labels["idle"] = PROMPT_ICON           # prompt box up → idle = ready for input
-    # lead every state label with the timer so the elapsed time is ALWAYS the first thing
-    # shown, whichever state herdr swaps in (custom_status is no longer used for it)
-    labels = {state: f"{timer} {rest}".rstrip() for state, rest in labels.items()}
-    return timer, labels
+    elapsed = int(time.time()) - since
+    timer = fmt_elapsed(elapsed)
+    # per-detected-state ICON only — the detail text rides in custom_status, not the label
+    work_icon = "🔁" if intent == "looping" else "⚡"
+    stop_icon = STOP_ICON.get(intent, "")      # ✅/⏳/✋ for done/waiting/input, else ""
+    icons = {"working": work_icon, "unknown": ""}
+    for s in STOPPED_STATES:                    # idle, blocked, done
+        icons[s] = stop_icon
+    if intent not in STOP_ICON and elapsed < STALE_S:
+        icons["idle"] = IDLE_ICON              # idle pane → 💤 (suppressed once stale, so
+                                               # the skull stands alone)
+    # icon first, then the timer; a stateless pane (no icon) shows just the timer
+    labels = {state: f"{icon} {timer}".strip() for state, icon in icons.items()}
+    return detail, labels
 
 def report(pane, *args):
     try:
@@ -119,9 +99,10 @@ def push_pane(pane):
     r = render(pane)
     if not r:
         return
-    _timer, labels = r
-    # the timer now leads each state label; clear custom_status so it isn't shown twice
-    args = ["--clear-custom-status", "--ttl-ms", str(TTL_MS)]
+    detail, labels = r
+    # the icon+timer live in the state label; the detail description rides in custom_status
+    args = ["--ttl-ms", str(TTL_MS)]
+    args += ["--custom-status", detail] if detail else ["--clear-custom-status"]
     for state, label in labels.items():
         args += ["--state-label", f"{state}={label}"]
     report(pane, *args)
@@ -137,8 +118,6 @@ def reconcile(pane, H, now):
     last = read_last(pane)
     if last is not None and last != H:                 # a real lifecycle transition
         since = now                                    # re-anchor the timer
-        if H == "working":
-            clear_prompt(pane)                         # prompt box is gone
         if manual_ts and intent in STOP_ICON and last != "working" and H == "working":
             intent, detail, manual_ts = "auto", "", 0  # waiting/input/done release on resume;
                                                        # working/looping persist
@@ -191,10 +170,11 @@ if mode == "clearpane":
 if mode != "daemon":
     sys.exit(0)
 
-# ================= daemon: timer + register/prune + live-prompt detection =================
+# ================= daemon: timer + register/prune =================
+# herdr already reports each pane's agent_status (idle/working/blocked/…); the daemon just
+# polls it on a tick to advance the timer and register/prune. State transitions also arrive
+# promptly via the plugin's event hook (which runs `__run event`), so no subscription is needed.
 last_push = {}
-sub_set = set()
-sock = None
 
 def list_agent_panes():
     try:
@@ -204,40 +184,21 @@ def list_agent_panes():
     except Exception:
         return None
 
-def connect():
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(SOCK_PATH)
-    subs = [{"type": "pane.output_matched", "pane_id": p, "source": PROMPT_SOURCE,
-             "match": {"type": "regex", "value": PROMPT_RE}, "strip_ansi": True}
-            for p in sub_set]
-    if subs:
-        s.sendall((json.dumps({"id": "sub", "method": "events.subscribe",
-                               "params": {"subscriptions": subs}}) + "\n").encode())
-    return s
-
 def maybe_push(pane, now):
     r = render(pane)
     if not r:
         return
-    timer, labels = r
-    sig = (timer, tuple(sorted(labels.items())))
+    detail, labels = r
+    sig = (detail, tuple(sorted(labels.items())))
     prev = last_push.get(pane)
     if prev is None or prev[0] != sig or now - prev[1] >= KEEPALIVE_S:
         push_pane(pane)
         last_push[pane] = (sig, now)
 
 def resync(now):
-    global sock, sub_set
     panes = list_agent_panes()
     if panes is None:
         return
-    if set(panes) != sub_set:                          # pane set changed → refresh prompt subs
-        sub_set = set(panes)
-        try:
-            if sock is not None: sock.close()
-        except Exception: pass
-        try: sock = connect()
-        except Exception: sock = None
     for pane, H in panes.items():
         reconcile(pane, H, now)
         maybe_push(pane, now)
@@ -250,54 +211,11 @@ def resync(now):
         if f.endswith(".state"):
             base = f[:-6]
             if base not in present:                     # pane gone → forget it
-                for ext in (".state", ".last", ".prompt"):
+                for ext in (".state", ".last"):
                     try: os.remove(os.path.join(STATE_DIR, base + ext))
                     except Exception: pass
                 last_push.pop(base, None)
 
-sub_set = set(list_agent_panes() or {})
-try:
-    sock = connect()
-except Exception:
-    sock = None
-resync(int(time.time()))
-last_resync = int(time.time())
-
 while True:
-    ready = []
-    if sock is not None:
-        try:
-            ready, _, _ = select.select([sock], [], [], HEARTBEAT)
-        except Exception:
-            ready = []
-            try: sock.close()
-            except Exception: pass
-            sock = None
-    else:
-        time.sleep(HEARTBEAT)
-    now = int(time.time())
-    if ready:
-        try:
-            chunk = sock.recv(65536)
-        except Exception:
-            chunk = b""
-        if not chunk:                                  # stream closed → reconnect next loop
-            try: sock.close()
-            except Exception: pass
-            sock = None
-        else:
-            for line in chunk.split(b"\n"):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    ev = json.loads(line)
-                except Exception:
-                    continue
-                pane = ev.get("data", {}).get("pane_id")
-                if pane:                                # any pushed line = a prompt-box match
-                    set_prompt(pane)
-                    maybe_push(pane, now)
-    if now - last_resync >= HEARTBEAT:                  # timer tick + register/prune
-        resync(now)
-        last_resync = now
+    resync(int(time.time()))
+    time.sleep(HEARTBEAT)

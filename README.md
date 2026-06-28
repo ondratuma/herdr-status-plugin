@@ -6,23 +6,23 @@ the current pane.
 
 ## Parts
 
-- **`bin/herdr-status`** — the system command + a singleton daemon. Agents self-report intent
-  (`working` 🔨 / `looping` 🔁 / `waiting` ⏳ / `input` ✋ / `done` ✅, plus `clear` / `off`); the
-  daemon advances the counting timer, registers/prunes panes, and subscribes to
-  `pane.output_matched` to show `>_` when a pane is idle at its live prompt box.
+- **`bin/herdr-status`** — the system command + a singleton daemon (the implementation lives in
+  `lib/herdr-status.py`). Agents self-report intent (`working` ⚡ / `looping` 🔁 / `waiting` ⏳ /
+  `input` ✋ / `done` ✅, plus `clear` / `off`); the daemon advances the counting timer and
+  registers/prunes panes. An idle pane shows 💤 by default (herdr reports the idle state).
 - **`plugin/herdr-plugin.toml`** — the herdr plugin (`ot.claude-status`). Its `[[events]]` hooks
   on `pane.agent_detected` / `pane.agent_status_changed` run `herdr-status __run event`, so herdr
-  captures the lifecycle events natively. (`pane.output_matched` is subscription-only, so the
-  daemon — not the plugin — subscribes to it.)
+  captures the lifecycle events natively and pushes an immediate update on every transition.
 - **`bin/herdr-status-rename`** — rename the current pane (sets both the pane label and the sidebar
   display name). `herdr-status-rename <name>` or `herdr-status-rename --clear`.
 
 ## Display model
 
-Everything lives in herdr's `state_labels` slot (herdr swaps the label natively per detected
-state). Every label is led by the counting timer, so the elapsed time is always the first thing
-shown: a working pane reads `6m 🔨`, an idle pane at its prompt reads `6m >_`, a finished one
-`6m ✅ <detail>`. Self-reports override the stopped-state icon (✋/⏳/✅). `custom_status` is unused.
+Each label in herdr's `state_labels` slot is `<icon> <timer>` — herdr swaps the icon natively per
+detected state: ⚡ working, 🔁 looping, 💤 idle, ✅/⏳/✋ on a self-report, and 💀 once a pane goes
+stale (24h+, where the icon is dropped so the skull stands alone). The self-reported detail (if
+any) rides in `custom_status`, so a working pane reads `⚡ 6m fixing the parser` and an idle one
+just `💤 6m`.
 
 ## Install
 
