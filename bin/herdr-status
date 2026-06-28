@@ -19,9 +19,10 @@ set -euo pipefail
 #      `pane.output_matched` (the only way to get it — it is NOT a plugin hook) to detect the
 #      live prompt box (`❯`); while a pane is idle with its prompt box up, the idle icon is `>_`.
 #
-# Display: state_labels = the icon (herdr swaps it per detected state), custom_status = the
-# timer (`6m`, `24h+ 💀`). Each push has a short TTL so a dead daemon self-cleans. Safe anywhere:
-# a no-op outside herdr (HERDR_ENV != 1), best-effort otherwise.
+# Display: state_labels carries everything (herdr swaps the label per detected state); each label
+# is led by the counting timer so the elapsed time is always shown first (`6m 🔨`, `6m >_`,
+# `24h+ 💀`). custom_status is cleared/unused. Each push has a short TTL so a dead daemon
+# self-cleans. Safe anywhere: a no-op outside herdr (HERDR_ENV != 1), best-effort otherwise.
 
 STATE_DIR="${HOME}/.config/herdr/claude-status"
 DAEMON_PID="${STATE_DIR}/daemon.pid"

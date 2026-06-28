@@ -102,6 +102,9 @@ def render(pane):
         labels[s] = stopped_lbl
     if intent not in STOP_ICON and has_prompt(pane):
         labels["idle"] = PROMPT_ICON           # prompt box up → idle = ready for input
+    # lead every state label with the timer so the elapsed time is ALWAYS the first thing
+    # shown, whichever state herdr swaps in (custom_status is no longer used for it)
+    labels = {state: f"{timer} {rest}".rstrip() for state, rest in labels.items()}
     return timer, labels
 
 def report(pane, *args):
@@ -116,8 +119,9 @@ def push_pane(pane):
     r = render(pane)
     if not r:
         return
-    timer, labels = r
-    args = ["--custom-status", timer, "--ttl-ms", str(TTL_MS)]
+    _timer, labels = r
+    # the timer now leads each state label; clear custom_status so it isn't shown twice
+    args = ["--clear-custom-status", "--ttl-ms", str(TTL_MS)]
     for state, label in labels.items():
         args += ["--state-label", f"{state}={label}"]
     report(pane, *args)

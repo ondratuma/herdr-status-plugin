@@ -19,9 +19,10 @@ the current pane.
 
 ## Display model
 
-Two herdr slots: `state_labels` = the icon (herdr swaps it natively per detected state),
-`custom_status` = the timer (`6m`, `24h+ 💀` once stale). So a working pane reads `🔨 6m`, an idle
-pane at its prompt reads `>_ 6m`. Self-reports override the stopped-state icon (✋/⏳/✅).
+Everything lives in herdr's `state_labels` slot (herdr swaps the label natively per detected
+state). Every label is led by the counting timer, so the elapsed time is always the first thing
+shown: a working pane reads `6m 🔨`, an idle pane at its prompt reads `6m >_`, a finished one
+`6m ✅ <detail>`. Self-reports override the stopped-state icon (✋/⏳/✅). `custom_status` is unused.
 
 ## Install
 
