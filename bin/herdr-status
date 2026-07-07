@@ -122,9 +122,10 @@ shift || true
 if [ "$verb" = "__run" ]; then
 	[ -n "${HERDR_ENV:-}" ] || exit 0
 	command -v python3 >/dev/null 2>&1 || exit 0
-	# on a lifecycle event, make sure the helper CLIs are on PATH (self-install from the
-	# stable installed root; see ensure_path_links). Cheap + idempotent, so it's fine per-event.
-	[ "${1:-}" = "event" ] && ensure_path_links
+	# on first contact with an agent, make sure the helper CLIs are on PATH (self-install from
+	# the stable installed root; see ensure_path_links). Gated to pane.agent_detected — which
+	# fires once per agent lifecycle — so the frequent pane.agent_status_changed events skip it.
+	[ "${HERDR_PLUGIN_EVENT:-}" = "pane.agent_detected" ] && ensure_path_links
 	# absolute path, so the daemon re-spawn (Popen) works no matter how we were invoked
 	# (herdr runs the event hook as the manifest's relative `bin/herdr-status`).
 	export HERDR_STATUS_BIN="$(resolve_repo)/bin/herdr-status"
