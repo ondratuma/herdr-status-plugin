@@ -19,10 +19,10 @@ PLUGIN_ID="ot.claude-status"
 # 2) (re)link the herdr plugin from this repo. Best-effort: needs a running herdr server.
 if command -v herdr >/dev/null 2>&1; then
 	herdr plugin unlink "$PLUGIN_ID" >/dev/null 2>&1 || true
-	if herdr plugin link "$REPO/plugin" >/dev/null 2>&1; then
-		echo "linked  herdr plugin $PLUGIN_ID -> $REPO/plugin"
+	if herdr plugin link "$REPO" >/dev/null 2>&1; then
+		echo "linked  herdr plugin $PLUGIN_ID -> $REPO"
 	else
-		echo "note    'herdr plugin link $REPO/plugin' failed (herdr server not running?) — run it manually inside herdr" >&2
+		echo "note    'herdr plugin link $REPO' failed (herdr server not running?) — run it manually inside herdr" >&2
 	fi
 else
 	echo "note    herdr not on PATH; skipped plugin link" >&2

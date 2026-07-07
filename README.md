@@ -12,7 +12,7 @@ the current pane.
   `lib/herdr-status.py`). Agents self-report intent (`working` ⚡ / `looping` 🔁 / `waiting` ⏳ /
   `input` ✋ / `done` ✅, plus `clear` / `off`); the daemon advances the counting timer and
   registers/prunes panes. An idle pane shows 💤 by default (herdr reports the idle state).
-- **`plugin/herdr-plugin.toml`** — the herdr plugin (`ot.claude-status`). Its `[[events]]` hooks
+- **`herdr-plugin.toml`** — the herdr plugin manifest (`ot.claude-status`), at the repo root. Its `[[events]]` hooks
   on `pane.agent_detected` / `pane.agent_status_changed` run `herdr-status __run event`, so herdr
   captures the lifecycle events natively and pushes an immediate update on every transition.
 - **`bin/herdr-status-rename`** — rename the current pane (sets both the pane label and the sidebar

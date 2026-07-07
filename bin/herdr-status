@@ -126,7 +126,7 @@ fi
 # its daemon. Run it from a pane in the session you want tracked.
 if [ "$verb" = "link" ]; then
 	command -v herdr >/dev/null 2>&1 || { echo "herdr not found" >&2; exit 1; }
-	plugin_dir="$(resolve_repo)/plugin"
+	plugin_dir="$(resolve_repo)"
 	herdr plugin unlink ot.claude-status >/dev/null 2>&1 || true
 	if herdr plugin link "$plugin_dir" >/dev/null 2>&1; then
 		echo "herdr: plugin linked into session '$(server_key)' — its agents are now tracked"
