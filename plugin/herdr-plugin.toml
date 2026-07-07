@@ -1,0 +1,36 @@
+# herdr plugin: capture pane lifecycle events and feed them to the `herdr-status` command,
+# which maintains per-pane activity status (icon via state_labels + a counting timer).
+#
+# This is the EVENT-CAPTURE half. herdr invokes the command below once per matching event,
+# passing HERDR_PLUGIN_EVENT + HERDR_PLUGIN_EVENT_JSON (which carry pane_id + agent_status).
+# The timer's between-event ticking is handled by the daemon that `herdr-status` manages
+# (bootstrapped from the first event, so no external trigger is needed).
+#
+# The event command is RELATIVE: herdr runs plugin commands with the plugin directory as their
+# working directory, so `bin/herdr-status` resolves inside the installed/linked plugin root on
+# every machine — no absolute path or per-machine rendering.
+#
+# Install:  herdr plugin install <owner>/<repo>     (runs [[build]] to put the CLIs on PATH)
+# Develop:  herdr plugin link <this repo>/plugin     (run ./install.sh once for the PATH links)
+
+id = "ot.claude-status"
+name = "Claude Status"
+version = "0.1.0"
+min_herdr_version = "0.7.1"
+description = "Per-pane activity status: icon via state_labels (herdr-swapped) + a counting timer."
+platforms = ["macos", "linux"]
+
+# Symlink the helper CLIs onto PATH at install time so agents can call `herdr-status` /
+# `herdr-status-rename`. Build steps run only on `herdr plugin install`, not on `plugin link`;
+# local development uses ./install.sh for the same step.
+[[build]]
+command = ["bash", "scripts/install-bin.sh"]
+platforms = ["macos", "linux"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["bin/herdr-status", "__run", "event"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["bin/herdr-status", "__run", "event"]

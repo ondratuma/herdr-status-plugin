@@ -42,13 +42,26 @@ self-reported detail (if any) rides in `custom_status`, so a working pane reads
 ## Install
 
 ```sh
-./install.sh
+herdr plugin install ondratuma/herdr-status-plugin
 ```
 
-Symlinks `bin/*` into `~/.local/bin`, renders `plugin/herdr-plugin.toml` from its template
-(`plugin/herdr-plugin.toml.in`, injecting this repo's absolute path — the rendered file is
-machine-specific and gitignored), and (re)links the plugin via `herdr plugin link`. Idempotent;
-re-run after pulling changes. The plugin link step needs a running herdr server (run it from
+This clones the repo, registers the plugin, and runs the manifest's `[[build]]` step
+(`scripts/install-bin.sh`) to symlink `herdr-status` and `herdr-status-rename` into `~/.local/bin`
+so agents can call them. The event hooks run `bin/herdr-status` via the manifest's **relative**
+command path (herdr runs plugin commands with the plugin directory as their working directory), so
+nothing is machine-specific and there's no path to render. Make sure `~/.local/bin` is on your
+`PATH`.
+
+### Local development
+
+When hacking on the plugin, link the working tree instead — build steps don't run on
+`plugin link`, so use `install.sh` to do the same PATH-symlink step:
+
+```sh
+./install.sh    # symlinks the CLIs onto PATH + `herdr plugin link` this repo
+```
+
+Idempotent; re-run after pulling changes. The link step needs a running herdr server (run it from
 inside herdr if it reports the server isn't reachable).
 
 The agent-facing usage instructions live in `~/.claude-shared/CLAUDE.md` (the herdr session

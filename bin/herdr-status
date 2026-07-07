@@ -106,7 +106,9 @@ shift || true
 if [ "$verb" = "__run" ]; then
 	[ -n "${HERDR_ENV:-}" ] || exit 0
 	command -v python3 >/dev/null 2>&1 || exit 0
-	export HERDR_STATUS_BIN="$0"
+	# absolute path, so the daemon re-spawn (Popen) works no matter how we were invoked
+	# (herdr runs the event hook as the manifest's relative `bin/herdr-status`).
+	export HERDR_STATUS_BIN="$(resolve_repo)/bin/herdr-status"
 	impl="$(resolve_repo)/lib/herdr-status.py"   # .py lives in the repo's lib/, off PATH
 	[ -f "$impl" ] || exit 0
 	exec python3 "$impl" "$@"
@@ -124,11 +126,7 @@ fi
 # its daemon. Run it from a pane in the session you want tracked.
 if [ "$verb" = "link" ]; then
 	command -v herdr >/dev/null 2>&1 || { echo "herdr not found" >&2; exit 1; }
-	repo="$(resolve_repo)"
-	plugin_dir="$repo/plugin"
-	# render the manifest from its template with this repo's absolute bin path (see install.sh)
-	sed "s|__HERDR_STATUS_BIN__|$repo/bin/herdr-status|g" \
-		"$plugin_dir/herdr-plugin.toml.in" > "$plugin_dir/herdr-plugin.toml"
+	plugin_dir="$(resolve_repo)/plugin"
 	herdr plugin unlink ot.claude-status >/dev/null 2>&1 || true
 	if herdr plugin link "$plugin_dir" >/dev/null 2>&1; then
 		echo "herdr: plugin linked into session '$(server_key)' — its agents are now tracked"
