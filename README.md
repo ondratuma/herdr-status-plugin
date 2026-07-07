@@ -4,6 +4,8 @@ Per-pane activity status for [herdr](https://herdr.dev) agent panes — shows, i
 what each agent pane is doing (icon) and for how long (a live timer), plus a helper to rename
 the current pane.
 
+![herdr sidebar listing agent panes, each with a status icon and a live timer: 🔁 looping, ⚡ working, ✋ waiting on input, ⏳ waiting on CI, ✅ done, 💤 idle, and 💀 stale.](docs/sidebar.png)
+
 ## Parts
 
 - **`bin/herdr-status`** — the system command + a singleton daemon (the implementation lives in
