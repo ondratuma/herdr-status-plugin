@@ -61,6 +61,22 @@ usage() {
 	exit 1
 }
 
+# Symlink the helper CLIs onto PATH so agents can call them by name. Driven from the event hook,
+# which runs in the STABLE installed plugin root — unlike a [[build]] step, which runs in a temp
+# checkout that herdr moves afterward (leaving any build-created symlink dangling). Idempotent and
+# quiet: acts only when a link is missing or points somewhere else.
+ensure_path_links() {
+	local repo bindir want
+	repo="$(resolve_repo)"
+	bindir="${HOME}/.local/bin"
+	for name in herdr-status herdr-status-rename; do
+		want="$repo/bin/$name"
+		[ "$(readlink "$bindir/$name" 2>/dev/null)" = "$want" ] && continue
+		mkdir -p "$bindir" 2>/dev/null || true
+		ln -sfn "$want" "$bindir/$name" 2>/dev/null || true
+	done
+}
+
 sanitize()   { printf '%s' "${HERDR_PANE_ID//[^A-Za-z0-9]/_}"; }
 state_file() { printf '%s/%s.state' "$STATE_DIR" "$(sanitize)"; }
 
@@ -106,6 +122,9 @@ shift || true
 if [ "$verb" = "__run" ]; then
 	[ -n "${HERDR_ENV:-}" ] || exit 0
 	command -v python3 >/dev/null 2>&1 || exit 0
+	# on a lifecycle event, make sure the helper CLIs are on PATH (self-install from the
+	# stable installed root; see ensure_path_links). Cheap + idempotent, so it's fine per-event.
+	[ "${1:-}" = "event" ] && ensure_path_links
 	# absolute path, so the daemon re-spawn (Popen) works no matter how we were invoked
 	# (herdr runs the event hook as the manifest's relative `bin/herdr-status`).
 	export HERDR_STATUS_BIN="$(resolve_repo)/bin/herdr-status"

@@ -11,21 +11,20 @@
 # every machine — no absolute path or per-machine rendering. This manifest therefore lives at the
 # repo root, alongside bin/, lib/, and scripts/, so the plugin root is the repo root.
 #
-# Install:  herdr plugin install <owner>/<repo>   (runs [[build]] to put the CLIs on PATH)
-# Develop:  herdr plugin link <this repo>          (run ./install.sh once for the PATH links)
+# The helper CLIs (herdr-status, herdr-status-rename) are put on PATH by the event hook itself
+# (it symlinks them into ~/.local/bin from the installed plugin root on first run) — NOT by a
+# [[build]] step. Build steps run in herdr's temporary checkout, which is then moved to the final
+# managed location, so any symlink a build step creates would dangle. The event hook runs from the
+# stable installed root, so its links stay valid and re-heal on every reinstall.
+#
+# Install:  herdr plugin install <owner>/<repo>   (links appear once an agent is first detected)
+# Develop:  herdr plugin link <this repo>          (run ./install.sh for the links up front)
 
 id = "ot.claude-status"
 name = "Claude Status"
 version = "0.1.0"
 min_herdr_version = "0.7.1"
 description = "Per-pane activity status: icon via state_labels (herdr-swapped) + a counting timer."
-platforms = ["macos", "linux"]
-
-# Symlink the helper CLIs onto PATH at install time so agents can call `herdr-status` /
-# `herdr-status-rename`. Build steps run only on `herdr plugin install`, not on `plugin link`;
-# local development uses ./install.sh for the same step.
-[[build]]
-command = ["bash", "scripts/install-bin.sh"]
 platforms = ["macos", "linux"]
 
 [[events]]

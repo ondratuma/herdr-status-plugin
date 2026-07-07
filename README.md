@@ -45,12 +45,15 @@ self-reported detail (if any) rides in `custom_status`, so a working pane reads
 herdr plugin install ondratuma/herdr-status-plugin
 ```
 
-This clones the repo, registers the plugin, and runs the manifest's `[[build]]` step
-(`scripts/install-bin.sh`) to symlink `herdr-status` and `herdr-status-rename` into `~/.local/bin`
-so agents can call them. The event hooks run `bin/herdr-status` via the manifest's **relative**
-command path (herdr runs plugin commands with the plugin directory as their working directory), so
-nothing is machine-specific and there's no path to render. Make sure `~/.local/bin` is on your
-`PATH`.
+This clones the repo and registers the plugin. The event hooks run `bin/herdr-status` via the
+manifest's **relative** command path (herdr runs plugin commands with the plugin directory as their
+working directory), so nothing is machine-specific and there's no path to render.
+
+The helper CLIs (`herdr-status`, `herdr-status-rename`) are symlinked into `~/.local/bin` by the
+event hook itself, the first time an agent is detected in a pane — not by a build step. (A build
+step runs in herdr's temporary checkout, which herdr then moves to its managed location, so any
+symlink it created would dangle; the event hook runs from the stable installed root instead.)
+Make sure `~/.local/bin` is on your `PATH`.
 
 ### Local development
 
