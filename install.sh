@@ -18,7 +18,12 @@ for src in "$REPO"/bin/*; do
 	echo "linked  $BIN_DIR/$name -> $src"
 done
 
-# 2) (re)link the herdr plugin from this repo. Best-effort: needs a running herdr server.
+# 2) render the plugin manifest from its template, injecting this repo's absolute bin path.
+sed "s|__HERDR_STATUS_BIN__|${REPO}/bin/herdr-status|g" \
+	"$REPO/plugin/herdr-plugin.toml.in" > "$REPO/plugin/herdr-plugin.toml"
+echo "rendered  $REPO/plugin/herdr-plugin.toml"
+
+# 3) (re)link the herdr plugin from this repo. Best-effort: needs a running herdr server.
 if command -v herdr >/dev/null 2>&1; then
 	herdr plugin unlink "$PLUGIN_ID" >/dev/null 2>&1 || true
 	if herdr plugin link "$REPO/plugin" >/dev/null 2>&1; then

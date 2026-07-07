@@ -5,7 +5,9 @@
 # passing HERDR_PLUGIN_EVENT + HERDR_PLUGIN_EVENT_JSON (which carry pane_id + agent_status).
 # The timer's between-event ticking is handled by the daemon that `herdr-status` manages.
 #
-# Link it with:  herdr plugin link <this repo>/plugin
+# NOTE: this is a TEMPLATE. `__HERDR_STATUS_BIN__` is substituted with the absolute path to
+# bin/herdr-status by install.sh (and by `herdr-status link`), producing plugin/herdr-plugin.toml
+# (gitignored). Don't hardcode a machine-specific path here.
 
 id = "ot.claude-status"
 name = "Claude Status"
@@ -16,8 +18,8 @@ platforms = ["macos", "linux"]
 
 [[events]]
 on = "pane.agent_detected"
-command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
+command = ["__HERDR_STATUS_BIN__", "__run", "event"]
 
 [[events]]
 on = "pane.agent_status_changed"
-command = ["/Users/tumao/.local/bin/herdr-status", "__run", "event"]
+command = ["__HERDR_STATUS_BIN__", "__run", "event"]

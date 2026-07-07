@@ -1,3 +1,6 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# rendered from plugin/herdr-plugin.toml.in by install.sh / `herdr-status link` (machine-specific path)
+plugin/herdr-plugin.toml

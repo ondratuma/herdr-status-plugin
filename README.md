@@ -43,9 +43,11 @@ self-reported detail (if any) rides in `custom_status`, so a working pane reads
 ./install.sh
 ```
 
-Symlinks `bin/*` into `~/.local/bin` and (re)links the plugin from this repo via
-`herdr plugin link`. Idempotent; re-run after pulling changes. The plugin link step needs a
-running herdr server (run it from inside herdr if it reports the server isn't reachable).
+Symlinks `bin/*` into `~/.local/bin`, renders `plugin/herdr-plugin.toml` from its template
+(`plugin/herdr-plugin.toml.in`, injecting this repo's absolute path — the rendered file is
+machine-specific and gitignored), and (re)links the plugin via `herdr plugin link`. Idempotent;
+re-run after pulling changes. The plugin link step needs a running herdr server (run it from
+inside herdr if it reports the server isn't reachable).
 
 The agent-facing usage instructions live in `~/.claude-shared/CLAUDE.md` (the herdr session
 status section), loaded into every Claude Code session.
