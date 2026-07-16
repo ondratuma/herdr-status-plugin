@@ -22,9 +22,9 @@
 
 id = "ot.claude-status"
 name = "Claude Status"
-version = "0.1.0"
+version = "0.2.0"
 min_herdr_version = "0.7.1"
-description = "Per-pane activity status: icon via state_labels (herdr-swapped) + a counting timer."
+description = "Per-pane activity status via metadata tokens: $statusIcon + $timeSinceLastAction + $custom_status detail."
 platforms = ["macos", "linux"]
 
 [[events]]

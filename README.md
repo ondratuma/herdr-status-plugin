@@ -33,11 +33,22 @@ start that session's daemon. State and daemons are namespaced per server under
 
 ## Display model
 
-Each label in herdr's `state_labels` slot is `<icon> <timer>` — herdr swaps the icon natively per
-detected state: ⚡ working, 🔁 looping, 💤 idle, ✅/⏳/✋ on a self-report, and 💀 once a pane goes
-stale (24h+) — where the skull becomes the icon and leads the actual hour count, e.g. `💀 36h`. The
-self-reported detail (if any) rides in `custom_status`, so a working pane reads
-`⚡ 6m fixing the parser` and an idle one just `💤 6m`.
+Everything is reported as pane **metadata tokens** (herdr ≥ 0.7.4), which the sidebar renders
+wherever the agent row layout references them:
+
+- `$statusIcon` — icon for the pane's current state: ⚡ working, 🔁 looping, 💤 idle,
+  ✅/⏳/✋ on a self-report, and 💀 once a pane goes stale (24h+).
+- `$timeSinceLastAction` — counting timer since the last lifecycle transition (`6m`, `1h12m`, `36h`).
+- `$custom_status` — the self-reported detail text, if any.
+
+Add them to the agent rows in `~/.config/herdr/config.toml`:
+
+```toml
+[ui.sidebar.agents]
+rows = [["state_icon", "workspace", "tab"], ["agent", "$statusIcon", "$timeSinceLastAction", "$custom_status"]]
+```
+
+A working pane then reads `⚡ 6m fixing the parser`, an idle one just `💤 6m`.
 
 ## Install
 

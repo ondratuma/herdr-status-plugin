@@ -83,28 +83,27 @@ def fmt_elapsed(sec):
     m = sec // 60
     return f"{m}m" if m < 60 else f"{m // 60}h{m % 60}m"
 
-def render(pane):
+def render(pane, status):
+    # → (detail, icon, timer) for the pane's CURRENT agent_status. herdr ≥0.7.4 renders
+    # custom pane metadata as $name tokens in the sidebar row layout, so the icon is
+    # computed per push (events + the daemon heartbeat keep it current) instead of
+    # pre-declaring one label per state.
     st = read_state(pane)
     if not st:
         return None
     intent, detail, since, _ = st
     elapsed = int(time.time()) - since
     timer = fmt_elapsed(elapsed)
-    # per-detected-state ICON only — the detail text rides in custom_status, not the label
-    if elapsed >= STALE_S:                       # stale pane → the skull becomes the icon (and
-        icons = {s: STALE_ICON for s in          # leads the time); the activity state is moot
-                 ("working", "idle", "blocked", "done", "unknown")}
+    if elapsed >= STALE_S:                       # stale pane → the skull becomes the icon;
+        icon = STALE_ICON                        # the activity state is moot
+    elif status == "working":
+        icon = "🔁" if intent == "looping" else "⚡"
+    elif status in STOPPED_STATES:               # idle, blocked, done
+        # ✅/⏳/✋ for a self-reported done/waiting/input; a plain idle pane shows 💤
+        icon = STOP_ICON.get(intent, IDLE_ICON if status == "idle" else "")
     else:
-        work_icon = "🔁" if intent == "looping" else "⚡"
-        stop_icon = STOP_ICON.get(intent, "")   # ✅/⏳/✋ for done/waiting/input, else ""
-        icons = {"working": work_icon, "unknown": ""}
-        for s in STOPPED_STATES:                 # idle, blocked, done
-            icons[s] = stop_icon
-        if intent not in STOP_ICON:
-            icons["idle"] = IDLE_ICON           # idle pane → 💤
-    # icon first, then the timer; a stateless pane (no icon) shows just the timer
-    labels = {state: f"{icon} {timer}".strip() for state, icon in icons.items()}
-    return detail, labels
+        icon = ""
+    return detail, icon, timer
 
 def report(pane, *args):
     try:
@@ -114,17 +113,20 @@ def report(pane, *args):
     except Exception:
         pass
 
-def push_pane(pane):
-    r = render(pane)
+TOKENS = ("statusIcon", "timeSinceLastAction", "custom_status")
+
+def push_pane(pane, status=None):
+    if status is None:
+        status = pane_status(pane)
+    r = render(pane, status)
     if not r:
         return
-    detail, labels = r
-    # the icon+timer live in the state label; the detail description rides in the
-    # custom_status metadata token (herdr 0.7.4 replaced --custom-status with --token)
+    detail, icon, timer = r
+    # everything rides in metadata tokens the sidebar row layout references as
+    # $statusIcon / $timeSinceLastAction / $custom_status (the self-reported detail)
     args = ["--ttl-ms", str(TTL_MS)]
-    args += ["--token", f"custom_status={detail}"] if detail else ["--clear-token", "custom_status"]
-    for state, label in labels.items():
-        args += ["--state-label", f"{state}={label}"]
+    for name, value in zip(TOKENS, (icon, timer, detail)):
+        args += ["--token", f"{name}={value}"] if value else ["--clear-token", name]
     report(pane, *args)
 
 # file-based so the one-shot event hook and the long-lived daemon agree
@@ -176,7 +178,7 @@ if mode == "event":                                    # invoked by the herdr pl
         H = data.get("agent_status") or pane_status(pane)
         now = int(time.time())
         reconcile(pane, H, now)
-        push_pane(pane)
+        push_pane(pane, H)
         ensure_daemon()
     sys.exit(0)
 if mode == "push":
@@ -185,7 +187,10 @@ if mode == "push":
     sys.exit(0)
 if mode == "clearpane":
     if len(ARGS) > 1:
-        report(ARGS[1], "--clear-token", "custom_status", "--clear-state-labels")
+        args = []
+        for name in TOKENS:
+            args += ["--clear-token", name]
+        report(ARGS[1], *args, "--clear-state-labels")
     sys.exit(0)
 if mode == "agents":
     # cross-session overview: every agent pane in every herdr session, with its current label.
@@ -210,7 +215,8 @@ if mode == "agents":
                 continue
             pid = p["pane_id"]
             status = p.get("agent_status") or "unknown"
-            label = (p.get("state_labels") or {}).get(status, "")
+            tokens = p.get("tokens") or {}
+            label = f"{tokens.get('statusIcon', '')} {tokens.get('timeSinceLastAction', '')}".strip()
             # the sidebar NAME: herdr renders display_agent (what herdr-status-rename sets),
             # falling back to the detected agent when unnamed — NOT the pane label or cwd.
             disp = p.get("display_agent") or p.get("agent") or "—"
@@ -256,15 +262,14 @@ def list_agent_panes():
     except Exception:
         return None
 
-def maybe_push(pane, now):
-    r = render(pane)
+def maybe_push(pane, status, now):
+    r = render(pane, status)
     if not r:
         return
-    detail, labels = r
-    sig = (detail, tuple(sorted(labels.items())))
+    sig = r
     prev = last_push.get(pane)
     if prev is None or prev[0] != sig or now - prev[1] >= KEEPALIVE_S:
-        push_pane(pane)
+        push_pane(pane, status)
         last_push[pane] = (sig, now)
 
 def resync(now):
@@ -273,7 +278,7 @@ def resync(now):
         return
     for pane, H in panes.items():
         reconcile(pane, H, now)
-        maybe_push(pane, now)
+        maybe_push(pane, H, now)
     present = {sanitize(p) for p in panes}
     try:
         files = os.listdir(STATE_DIR)
