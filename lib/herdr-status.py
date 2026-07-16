@@ -119,9 +119,10 @@ def push_pane(pane):
     if not r:
         return
     detail, labels = r
-    # the icon+timer live in the state label; the detail description rides in custom_status
+    # the icon+timer live in the state label; the detail description rides in the
+    # custom_status metadata token (herdr 0.7.4 replaced --custom-status with --token)
     args = ["--ttl-ms", str(TTL_MS)]
-    args += ["--custom-status", detail] if detail else ["--clear-custom-status"]
+    args += ["--token", f"custom_status={detail}"] if detail else ["--clear-token", "custom_status"]
     for state, label in labels.items():
         args += ["--state-label", f"{state}={label}"]
     report(pane, *args)
@@ -184,7 +185,7 @@ if mode == "push":
     sys.exit(0)
 if mode == "clearpane":
     if len(ARGS) > 1:
-        report(ARGS[1], "--clear-custom-status", "--clear-state-labels")
+        report(ARGS[1], "--clear-token", "custom_status", "--clear-state-labels")
     sys.exit(0)
 if mode == "agents":
     # cross-session overview: every agent pane in every herdr session, with its current label.
