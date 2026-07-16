@@ -22,7 +22,7 @@
 
 id = "ot.claude-status"
 name = "Claude Status"
-version = "0.2.1"
+version = "0.2.2"
 min_herdr_version = "0.7.1"
 description = "Per-pane activity status via metadata tokens: $statusIcon + $name + $timeSinceLastAction + $custom_status detail."
 platforms = ["macos", "linux"]

@@ -16,7 +16,11 @@ the current pane.
   on `pane.agent_detected` / `pane.agent_status_changed` run `herdr-status __run event`, so herdr
   captures the lifecycle events natively and pushes an immediate update on every transition.
 - **`bin/herdr-status-rename`** — rename the current pane (sets both the pane label and the sidebar
-  display name). `herdr-status-rename <name>` or `herdr-status-rename --clear`.
+  display name). `herdr-status-rename <name>` or `herdr-status-rename --clear`. The name is stored
+  keyed by the pane's **agent session id** (reported by herdr's agent integration, e.g.
+  `herdr integration install claude`), so it survives herdr server restarts and follows a resumed
+  session into a new pane — the daemon re-applies it. Panes without a session id fall back to a
+  pane-scoped name that lives only as long as the server.
 
 ## Multiple herdr sessions
 

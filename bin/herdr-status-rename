@@ -21,17 +21,20 @@ if [ -z "$pane" ]; then
 fi
 [ -n "$pane" ] || { echo "herdr-status-rename: could not resolve the current pane" >&2; exit 1; }
 
+# the name is stored keyed by the pane's AGENT SESSION id (setname/clearname in the
+# python impl), so it survives herdr server restarts and follows a resumed session into
+# a new pane; the daemon re-applies it as display_agent + the $name token. Panes without
+# a session id (no agent integration) fall back to a pane-scoped display_agent.
 if [ "$1" = "--clear" ]; then
 	herdr pane rename "$pane" --clear >/dev/null
-	herdr pane report-metadata "$pane" --source rename --clear-display-agent >/dev/null
+	herdr pane report-metadata "$pane" --source rename --clear-display-agent >/dev/null 2>&1 || true
+	"$(dirname "$0")/herdr-status" __run clearname "$pane" 2>/dev/null || true
 	echo "herdr: cleared name on $pane"
 else
 	name="$*"
 	herdr pane rename "$pane" "$name" >/dev/null
-	herdr pane report-metadata "$pane" --source rename --display-agent "$name" >/dev/null
+	# drop any legacy pane-scoped name from the old rename source so it can't shadow
+	herdr pane report-metadata "$pane" --source rename --clear-display-agent >/dev/null 2>&1 || true
+	"$(dirname "$0")/herdr-status" __run setname "$pane" "$name" 2>/dev/null || true
 	echo "herdr: renamed $pane → $name"
 fi
-
-# refresh the $name metadata token right away (herdr-status is a sibling of this script;
-# it re-reads display_agent, so this covers both set and clear)
-"$(dirname "$0")/herdr-status" __run push "$pane" 2>/dev/null || true
