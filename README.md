@@ -38,6 +38,8 @@ wherever the agent row layout references them:
 
 - `$statusIcon` — icon for the pane's current state: ⚡ working, 🔁 looping, 💤 idle,
   ✅/⏳/✋ on a self-report, and 💀 once a pane goes stale (24h+).
+- `$name` — the pane's display name (what `herdr-status-rename` set, falling back to the
+  detected agent, e.g. `claude`).
 - `$timeSinceLastAction` — counting timer since the last lifecycle transition (`6m`, `1h12m`, `36h`).
 - `$custom_status` — the self-reported detail text, if any.
 
@@ -45,7 +47,7 @@ Add them to the agent rows in `~/.config/herdr/config.toml`:
 
 ```toml
 [ui.sidebar.agents]
-rows = [["$statusIcon", { token = "agent", bold = true }, "$timeSinceLastAction"], ["$custom_status"]]
+rows = [["$statusIcon", "$name", "$timeSinceLastAction"], ["$custom_status"]]
 ```
 
 A working pane then reads `⚡ 6m fixing the parser`, an idle one just `💤 6m`.

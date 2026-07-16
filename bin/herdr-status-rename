@@ -31,3 +31,7 @@ else
 	herdr pane report-metadata "$pane" --source rename --display-agent "$name" >/dev/null
 	echo "herdr: renamed $pane → $name"
 fi
+
+# refresh the $name metadata token right away (herdr-status is a sibling of this script;
+# it re-reads display_agent, so this covers both set and clear)
+"$(dirname "$0")/herdr-status" __run push "$pane" 2>/dev/null || true

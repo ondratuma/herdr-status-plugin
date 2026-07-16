@@ -113,20 +113,21 @@ def report(pane, *args):
     except Exception:
         pass
 
-TOKENS = ("statusIcon", "timeSinceLastAction", "custom_status")
+TOKENS = ("statusIcon", "name", "timeSinceLastAction", "custom_status")
 
-def push_pane(pane, status=None):
-    if status is None:
-        status = pane_status(pane)
+def push_pane(pane, status=None, name=None):
+    if status is None or name is None:
+        status, name = pane_info(pane)
     r = render(pane, status)
     if not r:
         return
     detail, icon, timer = r
     # everything rides in metadata tokens the sidebar row layout references as
-    # $statusIcon / $timeSinceLastAction / $custom_status (the self-reported detail)
+    # $statusIcon / $name (display name, falls back to the detected agent) /
+    # $timeSinceLastAction / $custom_status (the self-reported detail)
     args = ["--ttl-ms", str(TTL_MS)]
-    for name, value in zip(TOKENS, (icon, timer, detail)):
-        args += ["--token", f"{name}={value}"] if value else ["--clear-token", name]
+    for token, value in zip(TOKENS, (icon, name, timer, detail)):
+        args += ["--token", f"{token}={value}"] if value else ["--clear-token", token]
     report(pane, *args)
 
 # file-based so the one-shot event hook and the long-lived daemon agree
@@ -160,12 +161,16 @@ def ensure_daemon():
     except Exception:
         pass
 
-def pane_status(pane):
+def pane_info(pane):
+    # → (agent_status, display name). The name is what `herdr-status-rename` set
+    # (display_agent), falling back to the detected agent (e.g. "claude").
     try:
         d = json.loads(subprocess.check_output(["herdr", "pane", "get", pane], timeout=3))
-        return d["result"]["pane"].get("agent_status") or "working"
+        p = d["result"]["pane"]
+        return (p.get("agent_status") or "working",
+                p.get("display_agent") or p.get("agent") or "")
     except Exception:
-        return "working"
+        return ("working", "")
 
 # ---- one-shot modes ----
 if mode == "event":                                    # invoked by the herdr plugin per event
@@ -175,10 +180,11 @@ if mode == "event":                                    # invoked by the herdr pl
         data = {}
     pane = data.get("pane_id")
     if pane:
-        H = data.get("agent_status") or pane_status(pane)
+        status, name = pane_info(pane)
+        H = data.get("agent_status") or status
         now = int(time.time())
         reconcile(pane, H, now)
-        push_pane(pane, H)
+        push_pane(pane, H, name)
         ensure_daemon()
     sys.exit(0)
 if mode == "push":
@@ -255,30 +261,32 @@ if mode != "daemon":
 last_push = {}
 
 def list_agent_panes():
+    # pane_id → (agent_status, display name); one `pane list` covers the whole tick
     try:
         data = json.loads(subprocess.check_output(["herdr", "pane", "list"], timeout=3))
-        return {p["pane_id"]: (p.get("agent_status") or "unknown")
+        return {p["pane_id"]: (p.get("agent_status") or "unknown",
+                               p.get("display_agent") or p.get("agent") or "")
                 for p in data["result"]["panes"] if p.get("agent")}
     except Exception:
         return None
 
-def maybe_push(pane, status, now):
+def maybe_push(pane, status, name, now):
     r = render(pane, status)
     if not r:
         return
-    sig = r
+    sig = (r, name)
     prev = last_push.get(pane)
     if prev is None or prev[0] != sig or now - prev[1] >= KEEPALIVE_S:
-        push_pane(pane, status)
+        push_pane(pane, status, name)
         last_push[pane] = (sig, now)
 
 def resync(now):
     panes = list_agent_panes()
     if panes is None:
         return
-    for pane, H in panes.items():
+    for pane, (H, name) in panes.items():
         reconcile(pane, H, now)
-        maybe_push(pane, H, now)
+        maybe_push(pane, H, name, now)
     present = {sanitize(p) for p in panes}
     try:
         files = os.listdir(STATE_DIR)

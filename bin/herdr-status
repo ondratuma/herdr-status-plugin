@@ -23,7 +23,8 @@ set -euo pipefail
 #      ~/.config/herdr/claude-status/<session>/ so concurrent sessions don't collide.
 #
 # Display: pane metadata tokens — $statusIcon (⚡ work, 🔁 loop, 💤 idle, ✅/⏳/✋ on a self-report,
-# 💀 once stale), $timeSinceLastAction (counting timer), $custom_status (self-reported detail) —
+# 💀 once stale), $name (display name, falls back to the detected agent), $timeSinceLastAction
+# (counting timer), $custom_status (self-reported detail) —
 # rendered wherever the sidebar's [ui.sidebar.agents] rows reference them, e.g. `⚡ 6m fixing parser`.
 # Each push has a short TTL so a dead daemon self-cleans. Safe anywhere: a no-op outside herdr
 # (HERDR_ENV != 1), best-effort.
