@@ -115,6 +115,46 @@ def report(pane, *args):
 
 TOKENS = ("statusIcon", "name", "timeSinceLastAction", "custom_status")
 
+# ---- merge-request tokens ($mr_1..$mr_4) -------------------------------------
+# Values come from the session-registry script (single source of truth for
+# session ↔ branch ↔ MR links; a launchd job keeps its MR state fresh). The
+# plugin only shells out to its `session-info <session-id>` JSON command — it
+# never touches the registry's sqlite db directly. No registry → tokens stay
+# empty and the row renders blank.
+REGISTRY = os.environ.get("HERDR_STATUS_REGISTRY") or os.path.expanduser(
+    "~/.claude-shared/session-registry/registry.py")
+MR_TOKENS = ("mr_1", "mr_2", "mr_3", "mr_4")
+MR_CACHE_S = 60
+_mr_cache = {}  # session id -> (fetched_epoch, (val1..val4))
+
+def fmt_mr(mr):
+    iid = mr.get("iid")
+    if not iid:
+        return ""
+    state = mr.get("state") or ""
+    if state == "merged":
+        return f"!{iid} merged"
+    return f"!{iid} ✓{mr.get('approvals') or 0}"
+
+def mr_values(session):
+    if not session or not os.path.isfile(REGISTRY):
+        return ("", "", "", "")
+    now = time.time()
+    hit = _mr_cache.get(session)
+    if hit and now - hit[0] < MR_CACHE_S:
+        return hit[1]
+    vals = []
+    try:
+        out = subprocess.check_output(
+            ["python3", REGISTRY, "session-info", session],
+            stderr=subprocess.DEVNULL, timeout=5)
+        vals = [fmt_mr(m) for m in json.loads(out).get("mrs", [])[:4]]
+    except Exception:
+        pass
+    vals = tuple((vals + ["", "", "", ""])[:4])
+    _mr_cache[session] = (now, vals)
+    return vals
+
 # custom names keyed by AGENT SESSION id (e.g. the Claude Code session uuid), so a name
 # survives herdr server restarts and follows the session into whatever pane hosts it.
 # Global across herdr sessions on purpose — agent session ids are unique.
@@ -159,7 +199,8 @@ def push_pane(pane, status=None, session=None, display=None):
     # $statusIcon / $name (custom or detected name) / $timeSinceLastAction /
     # $custom_status (the self-reported detail)
     args = ["--ttl-ms", str(TTL_MS)]
-    for token, value in zip(TOKENS, (icon, name, timer, detail)):
+    values = (icon, name, timer, detail) + mr_values(session)
+    for token, value in zip(TOKENS + MR_TOKENS, values):
         args += ["--token", f"{token}={value}"] if value else ["--clear-token", token]
     if stored and name != display:
         # re-apply the custom name as display_agent (a restarted server forgot it),
@@ -256,7 +297,7 @@ if mode == "clearname":
 if mode == "clearpane":
     if len(ARGS) > 1:
         args = []
-        for name in TOKENS:
+        for name in TOKENS + MR_TOKENS:
             args += ["--clear-token", name]
         report(ARGS[1], *args, "--clear-state-labels")
     sys.exit(0)
@@ -335,7 +376,7 @@ def maybe_push(pane, status, session, display, now):
     r = render(pane, status)
     if not r:
         return
-    sig = (r, resolve_name(session, display))
+    sig = (r, resolve_name(session, display), mr_values(session))
     prev = last_push.get(pane)
     if prev is None or prev[0] != sig or now - prev[1] >= KEEPALIVE_S:
         push_pane(pane, status, session, display)
