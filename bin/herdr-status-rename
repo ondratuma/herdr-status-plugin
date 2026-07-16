@@ -10,6 +10,11 @@ set -euo pipefail
 #   herdr-status-rename <name...>    rename to <name> (all args joined; spaces allowed)
 #   herdr-status-rename --clear      clear the custom name (revert to the detected default)
 #
+# If the pane's workspace holds exactly ONE agent session, the workspace label is renamed
+# to the same name too (a single-session workspace is "about" that session). Workspaces
+# with several sessions are left alone. `--clear` never touches the workspace label
+# (`herdr workspace rename` has no --clear).
+#
 # A no-op outside a herdr session (HERDR_ENV != 1) so it is always safe to call.
 
 [ -n "${HERDR_ENV:-}" ] || { echo "herdr-status-rename: not inside a herdr pane (HERDR_ENV != 1)" >&2; exit 0; }
@@ -37,4 +42,17 @@ else
 	herdr pane report-metadata "$pane" --source rename --clear-display-agent >/dev/null 2>&1 || true
 	"$(dirname "$0")/herdr-status" __run setname "$pane" "$name" 2>/dev/null || true
 	echo "herdr: renamed $pane → $name"
+
+	# single-session workspace: rename the workspace to match. Counts panes in this
+	# pane's workspace that carry an agent_session; plain terminal panes don't count.
+	ws="${pane%%:*}"
+	if [ -n "$ws" ]; then
+		sessions="$(herdr pane list --workspace "$ws" 2>/dev/null \
+			| python3 -c 'import sys,json; print(sum(1 for p in json.load(sys.stdin)["result"]["panes"] if p.get("agent_session")))' 2>/dev/null || echo "")"
+		if [ "$sessions" = "1" ]; then
+			if herdr workspace rename "$ws" "$name" >/dev/null 2>&1; then
+				echo "herdr: renamed workspace $ws → $name"
+			fi
+		fi
+	fi
 fi
