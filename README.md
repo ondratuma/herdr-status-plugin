@@ -45,7 +45,7 @@ Add them to the agent rows in `~/.config/herdr/config.toml`:
 
 ```toml
 [ui.sidebar.agents]
-rows = [["state_icon", "workspace", "tab"], ["agent", "$statusIcon", "$timeSinceLastAction", "$custom_status"]]
+rows = [["$statusIcon", "agent", "$timeSinceLastAction"], ["$custom_status"]]
 ```
 
 A working pane then reads `⚡ 6m fixing the parser`, an idle one just `💤 6m`.
